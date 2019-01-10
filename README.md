@@ -9,9 +9,11 @@ module load python
 ncar_pylib
 ```
 
-Note: The scripts in this repo need to be run in parallel. Make sure to launch the scripts using mpi, e.g.,
+Note: The scripts must be run on multiple MPI tasks via interactive jobs or batch jobs. A typical usage:
 
 ```
+module load python
+ncar_pylib
 mpiexec -n 36 compress.py -f *.nc
 ```
 
