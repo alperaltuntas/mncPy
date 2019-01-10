@@ -1,6 +1,23 @@
 # mncPy
 Memory-friendly parallel Python scripts to manipulate netcdf files
 
+## Prerequisites:
+
+On cheyenne, load the necessary modules by running the following commands before running the scripts:
+```
+module load python
+ncar_pylib
+```
+
+Note: The scripts in this repo need to be run in parallel. Make sure to launch the scripts using mpi, e.g.,
+
+```
+mpiexec -n 36 compress.py -f *.nc
+```
+
+To run parallel jobs on cheyenne, see https://www2.cisl.ucar.edu/resources/computational-systems/cheyenne/running-jobs/submitting-jobs-pbs
+
+
 ------------
 
 ## compress.py:
