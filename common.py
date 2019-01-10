@@ -13,14 +13,6 @@ import netcdftime as nct
 
 # pylint: disable=line-too-long, bad-whitespace, len-as-condition
 
-class ProcData(object,):
-    """ Encapsulate process-specific data. Distributed memory ensures data encapsulation
-        among tasks anyways, so this is for clearer coding purposes."""
-
-    def __init__(self,comm):
-        self.rank = comm.Get_rank()
-
-
 class GlobalData(object,):
     """ Encapsulates global data to be determined by rank 0 and broadcasted to the rest of the processors.
         Distributed memory ensures data encapsulation among tasks anyways, so this is for clearer coding purposes."""
@@ -107,6 +99,7 @@ def determine_component(files,args_c):
 
     if comp != "pop":
         raise RuntimeError("This CESM component is not supported yet.")
+    return comp
 
 
 def next_month_1st(date_in):
