@@ -1,15 +1,19 @@
 # mncPy
-Memory-friendly parallel Python scripts to manipulate netcdf files
+Memory-friendly parallel Python scripts to manipulate netCDF files.
 
 ## Prerequisites:
 
-On cheyenne, load the necessary modules by running the following commands before running the scripts:
+On NCAR machines, the following commands will load all the necessary libraries and modules:
 ```
 module load python
 ncar_pylib
 ```
 
-Note: The scripts must be run on multiple MPI tasks via interactive jobs or batch jobs. A typical usage:
+On other machines, use conda to install mpi4py, netCDF4, xarray, numpy.
+
+## Running the scripts:
+
+The scripts must be run on multiple MPI tasks (using mpiexec or equivalent) via interactive jobs or batch jobs. A typical usage on an interactive session:
 
 ```
 module load python
