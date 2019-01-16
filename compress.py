@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
-""" Compresses a given set of netcdf files in parallel
+""" Compresses a given set of netcdf files in parallel. The compressed files will be saved with a prefix "cmpr_".
+    After having checked the compressed files are ok, you can run the following linux command to OVERRIDE all of
+    the original files with their compressed versions:
+        rename "cmpr_" "" cmpr_*
 """
 
 from __future__ import print_function
@@ -19,9 +22,6 @@ parser.add_argument('-f', metavar='path', type=str, required=True, nargs='*',
 parser.add_argument('-x', metavar='excl', type=str, required=False,
                     help='(optional). File names that have the string provided after this flag'
                          ' will be discarded. ')
-parser.add_argument('-c', metavar='comp', type=str, required=False,
-                    help='(optional). 3-character CESM component name that generates the history '
-                    'files. If not provided, the script will try to determine this from file names.')
 parser.add_argument('-v', action='store_true', required=False, help='Verbose logging')
 args = parser.parse_args()
 
@@ -96,12 +96,8 @@ def main():
 
     # print global information
     if comm.Get_rank()==0:
-        print("Input begin date: ",glob.date0_in )
-        print("Input end date: ", glob.date1_in )
-        print("Output begin date: ",glob.date0_out )
-        print("Output end date: ",glob.date1_out )
-        print("Number of monthly avgs to generate", glob.nmonths)
-        print("Max number of months per core:", glob.m_per_proc)
+        print("Record begin date: ",glob.date0_in )
+        print("Record end date: ", glob.date1_in )
 
     compress_files(files)
 
