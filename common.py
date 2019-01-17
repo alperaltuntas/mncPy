@@ -36,8 +36,34 @@ class GlobalData(object,):
         """ obtain the global information from the set of netcdf files """
 
         self.files = files
-        self.fprefix = re.split(r'\d+-\d+-\d+', self.files[0])[0]
-        self.fsuffix = re.split(r'\d+-\d+-\d+', self.files[0])[1]
+
+        # determine the parts of the file name that comes before (prefix) and after (suffix) the date identifier
+        ndashes0 = self.files[0].count('-') # if two dashes: year-month-day; if one: year-month
+        if ndashes0==1:
+            self.fprefix = re.split(r'\d+-\d+', self.files[0])[0]
+            self.fsuffix = re.split(r'\d+-\d+', self.files[0])[1]
+        elif ndashes0==2:
+            self.fprefix = re.split(r'\d+-\d+-\d+', self.files[0])[0]
+            self.fsuffix = re.split(r'\d+-\d+-\d+', self.files[0])[1]
+        else:
+            raise RuntimeError("Cannot determine the date pattern in file "+self.files[0])
+            
+        for filename in self.files:
+            ndashes = filename.count('-')
+            if not ndashes==ndashes0:
+                raise RuntimeError("Files have different naming patterns. Make sure all files have the same pattern."+\
+                                   " You may use -x flag to exclude certain files.")
+            if ndashes0==1:
+                fprefix = re.split(r'\d+-\d+', self.files[0])[0]
+                fsuffix = re.split(r'\d+-\d+', self.files[0])[1]
+            elif ndashes0==2:
+                fprefix = re.split(r'\d+-\d+-\d+', self.files[0])[0]
+                fsuffix = re.split(r'\d+-\d+-\d+', self.files[0])[1] 
+
+            if (not fprefix==self.fprefix) or (not fsuffix==self.fsuffix):
+                raise RuntimeError("Files have different naming patterns. Make sure all files have the same pattern."+\
+                                   " You may use -x flag to exclude certain files.")
+            
 
         # read the time bounds within all the input netcdf files
         self.date0_in, self.date1_in, self.nc_dtime_unit, self.nc_calendar = read_datetime_info(self.files)
