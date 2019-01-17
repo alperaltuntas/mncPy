@@ -28,14 +28,17 @@ args = parser.parse_args()
 # MPI comm
 comm = MPI.COMM_WORLD
 
-# Global data that should be common to all processors
-glob = GlobalData()
-
-def compress_files(files):
+def compress_files():
     """ compresses a given set of netcdf files """
 
-    if args.v and comm.Get_rank()==0:
-        print("compressing files")
+    # get the list of files to compress
+    files = get_file_names(args.f, comm.Get_rank(), args.x, args.v)
+
+    # by default, exclude files that are already compressed by this script
+    files = [filename for filename in files if "cmpr_"!=filename[0:5]]
+
+    if comm.Get_rank()==0:
+        print("compressing "+str(len(files))+" files...")
     comm.Barrier()
 
     # determine files to be compressed by each proc
@@ -75,34 +78,12 @@ def compress_files(files):
                         lfile_ds_out.to_netcdf(path="cmpr_"+lfile, mode='a',
                                                encoding={da:compr_dict})
 
-
     comm.Barrier()
-    if args.v and comm.Get_rank()==0:
+    if comm.Get_rank()==0:
         print("done.")
-
-def main():
-    """ main function"""
-    global glob
-
-    # get the list of files
-    files = get_file_names(args.f, comm.Get_rank(), args.x, args.v)
-
-    # get the global information from files (at rank 0 only)
-    if comm.Get_rank()==0:
-        glob.obtain_global_info(files, comm.Get_size())
-
-    # broadcast/receive the global information:
-    glob = comm.bcast(glob, root=0)
-
-    # print global information
-    if comm.Get_rank()==0:
-        print("Record begin date: ",glob.date0_in )
-        print("Record end date: ", glob.date1_in )
-
-    compress_files(files)
 
 
 if __name__ == "__main__":
     if comm.Get_rank()==0:
         print("running with "+str(comm.Get_size())+" processors...")
-    main()
+    compress_files()
