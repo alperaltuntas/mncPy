@@ -5,7 +5,7 @@ Memory-friendly parallel Python scripts to manipulate netCDF files.
 
 On NCAR machines, the following commands will load all the necessary libraries and modules:
 ```
-module load python
+module load python/2.7.14
 ncar_pylib
 ```
 
@@ -16,7 +16,7 @@ On other machines, use conda to install mpi4py, netCDF4, xarray, numpy.
 The scripts must be run on multiple MPI tasks (using mpiexec or equivalent) via interactive jobs or batch jobs. A typical usage on an interactive session:
 
 ```
-module load python
+module load python/2.7.14
 ncar_pylib
 mpiexec -n 36 compress.py -f *.nc
 ```
