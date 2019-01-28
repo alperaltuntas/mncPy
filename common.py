@@ -10,6 +10,7 @@ import numpy as np
 import netCDF4 as nc4
 import xarray as xr
 import netcdftime as nct
+from collections import namedtuple
 
 # pylint: disable=line-too-long, bad-whitespace, len-as-condition
 
@@ -82,35 +83,39 @@ class GlobalData(object,):
         self.m_per_proc = int(np.ceil(float(self.nmonths)/commsize))
 
 
-def get_file_names(fpath, proc_rank, args_x, args_v):
+FilePath = namedtuple('FilePath', ['base','name'])
+
+def get_file_paths(fpaths_in, proc_rank, args_x, args_v):
+
     """ Returns a list of nc files at a given directory. If the path is not a directory but a file,
         it checks whether the file is a netcdf file, and if so, returns the directory. """
-    filelist = []
+    fpaths_out = []
 
-    # fpath is a list of multiple files:
-    if isinstance(fpath, list):
-        filelist = [filename for filename in fpath if (".nc" in filename and not (args_x!=None and args_x in filename))]
+    # fpaths_in is a list of multiple files:
+    if isinstance(fpaths_in, list):
+        fpaths_out = [FilePath(os.path.split(filepath)[0], os.path.split(filepath)[1]) \
+                      for filepath in fpaths_in if (".nc" in filepath and not (args_x!=None and args_x in filepath))]
 
     # fpath is a single netcdf file:
-    elif os.path.isfile(fpath) and fpath.endswith(".nc"):
-        filelist.append(fpath)
+    elif os.path.isfile(fpaths_in) and fpaths_in.endswith(".nc"):
+        fpaths_out.append(FilePath(os.path.split(fpaths_in)[0], os.path.split(fpaths_in)[1]))
 
-    # fpath is a single directory containing one or more netcdf files:
-    elif os.path.isdir(fpath):
-        for filename in os.listdir(fpath):
+    # fpaths_in is a single directory containing one or more netcdf files:
+    elif os.path.isdir(fpaths_in):
+        for filename in os.listdir(fpaths_in):
             if filename.endswith(".nc") and not (args_x!=None and args_x in filename):
-                filelist.append(filename)
-        if len(filelist) == 0:
-            raise RuntimeError("Couldn't find any .nc file in "+str(fpath)+".")
+                fpaths_out.append(FilePath(fpaths_in,filename))
+        if len(fpaths_out) == 0:
+            raise RuntimeError("Couldn't find any .nc file in "+str(fpaths_in)+".")
     else:
-        raise RuntimeError("Unknown file type: "+str(fpath)+
+        raise RuntimeError("Unknown file type: "+str(fpaths_in)+
                            ". Provide a path to an .nc file or a directory with nc files")
 
-    if len(filelist) == 0:
+    if len(fpaths_out) == 0:
         raise RuntimeError("Couldn't find any .nc files in the given directory.\n")
     if args_v and proc_rank == 0:
-        print("Total number of files to read: "+str(len(filelist)))
-    return filelist
+        print("Total number of files to read: "+str(len(fpaths_out)))
+    return fpaths_out
 
 
 def determine_component(files,args_c):
