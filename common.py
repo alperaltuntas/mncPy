@@ -91,25 +91,26 @@ def get_file_paths(fpaths_in, proc_rank, args_x, args_v):
         it checks whether the file is a netcdf file, and if so, returns the directory. """
     fpaths_out = []
 
-    # fpaths_in is a list of multiple files:
     if isinstance(fpaths_in, list):
-        fpaths_out = [FilePath(os.path.split(filepath)[0], os.path.split(filepath)[1]) \
-                      for filepath in fpaths_in if (".nc" in filepath and not (args_x!=None and args_x in filepath))]
 
-    # fpath is a single netcdf file:
-    elif os.path.isfile(fpaths_in) and fpaths_in.endswith(".nc"):
-        fpaths_out.append(FilePath(os.path.split(fpaths_in)[0], os.path.split(fpaths_in)[1]))
+        # fpaths_in is a list of multiple files:
+        if len(fpaths_in)>1:
+            fpaths_out = [FilePath(os.path.split(filepath)[0], os.path.split(filepath)[1]) \
+                          for filepath in fpaths_in if (".nc" in filepath and not (args_x!=None and args_x in filepath))]
+        elif len(fpaths_in)==1:
 
-    # fpaths_in is a single directory containing one or more netcdf files:
-    elif os.path.isdir(fpaths_in):
-        for filename in os.listdir(fpaths_in):
-            if filename.endswith(".nc") and not (args_x!=None and args_x in filename):
-                fpaths_out.append(FilePath(fpaths_in,filename))
-        if len(fpaths_out) == 0:
-            raise RuntimeError("Couldn't find any .nc file in "+str(fpaths_in)+".")
-    else:
-        raise RuntimeError("Unknown file type: "+str(fpaths_in)+
-                           ". Provide a path to an .nc file or a directory with nc files")
+            # fpath is a single netcdf file:
+            if fpaths_in[0].endswith(".nc"):
+                fpaths_out.append(FilePath(os.path.split(fpaths_in[0])[0], os.path.split(fpaths_in[0])[1]))
+
+            # fpaths_in is a single directory containing one or more netcdf files:
+            elif os.path.isdir(fpaths_in[0]):
+                for filename in os.listdir(fpaths_in[0]):
+                    if filename.endswith(".nc") and not (args_x!=None and args_x in filename):
+                        fpaths_out.append(FilePath(fpaths_in[0],filename))
+            else:
+                raise RuntimeError("Unknown file type: "+str(fpaths_in)+
+                                   ". Provide a path to an .nc file or a directory with nc files")
 
     if len(fpaths_out) == 0:
         raise RuntimeError("Couldn't find any .nc files in the given directory.\n")
