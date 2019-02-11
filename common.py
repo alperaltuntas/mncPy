@@ -9,7 +9,7 @@ import calendar
 import numpy as np
 import netCDF4 as nc4
 import xarray as xr
-import netcdftime as nct
+import cftime as cft
 from collections import namedtuple
 
 # pylint: disable=line-too-long, bad-whitespace, len-as-condition
@@ -37,34 +37,36 @@ class GlobalData(object,):
         """ obtain the global information from the set of netcdf files """
 
         self.files = files
+        f0name = self.files[0].name
 
         # determine the parts of the file name that comes before (prefix) and after (suffix) the date identifier
-        ndashes0 = self.files[0].count('-') # if two dashes: year-month-day; if one: year-month
+        ndashes0 = f0name.count('-') # if two dashes: year-month-day; if one: year-month
         if ndashes0==1:
-            self.fprefix = re.split(r'\d+-\d+', self.files[0])[0]
-            self.fsuffix = re.split(r'\d+-\d+', self.files[0])[1]
+            self.fprefix = re.split(r'\d+-\d+', f0name)[0]
+            self.fsuffix = re.split(r'\d+-\d+', f0name)[1]
         elif ndashes0==2:
-            self.fprefix = re.split(r'\d+-\d+-\d+', self.files[0])[0]
-            self.fsuffix = re.split(r'\d+-\d+-\d+', self.files[0])[1]
+            self.fprefix = re.split(r'\d+-\d+-\d+', f0name)[0]
+            self.fsuffix = re.split(r'\d+-\d+-\d+', f0name)[1]
         else:
-            raise RuntimeError("Cannot determine the date pattern in file "+self.files[0])
-            
-        for filename in self.files:
+            raise RuntimeError("Cannot determine the date pattern in file "+f0name)
+
+        for filepath in self.files:
+            filename = filepath.name
             ndashes = filename.count('-')
             if not ndashes==ndashes0:
                 raise RuntimeError("Files have different naming patterns. Make sure all files have the same pattern."+\
                                    " You may use -x flag to exclude certain files.")
             if ndashes0==1:
-                fprefix = re.split(r'\d+-\d+', self.files[0])[0]
-                fsuffix = re.split(r'\d+-\d+', self.files[0])[1]
+                fprefix = re.split(r'\d+-\d+', f0name)[0]
+                fsuffix = re.split(r'\d+-\d+', f0name)[1]
             elif ndashes0==2:
-                fprefix = re.split(r'\d+-\d+-\d+', self.files[0])[0]
-                fsuffix = re.split(r'\d+-\d+-\d+', self.files[0])[1] 
+                fprefix = re.split(r'\d+-\d+-\d+', f0name)[0]
+                fsuffix = re.split(r'\d+-\d+-\d+', f0name)[1]
 
             if (not fprefix==self.fprefix) or (not fsuffix==self.fsuffix):
                 raise RuntimeError("Files have different naming patterns. Make sure all files have the same pattern."+\
                                    " You may use -x flag to exclude certain files.")
-            
+
 
         # read the time bounds within all the input netcdf files
         self.date0_in, self.date1_in, self.nc_dtime_unit, self.nc_calendar = read_datetime_info(self.files)
@@ -83,7 +85,10 @@ class GlobalData(object,):
         self.m_per_proc = int(np.ceil(float(self.nmonths)/commsize))
 
 
-FilePath = namedtuple('FilePath', ['base','name'])
+FilePath_nt = namedtuple('FilePath', ['base','name'])
+class FilePath(FilePath_nt):
+    def __call__(self):
+        return os.path.join(self.base, self.name)
 
 def get_file_paths(fpaths_in, proc_rank, args_x, args_v):
 
@@ -137,12 +142,12 @@ def determine_component(files,args_c):
 def next_month_1st(date_in):
     """ returns the date of the first day of the next month following date_in """
     mth = date_in.month
-    return nct._netcdftime.DatetimeNoLeap(date_in.year + mth//12, mth%12 +1, 1 )
+    return cft.DatetimeNoLeap(date_in.year + mth//12, mth%12 +1, 1 )
 
 
 def first_of_month(date_in):
     """ returns the first day of the month date_in is in """
-    return nct._netcdftime.DatetimeNoLeap(date_in.year, date_in.month, 1)
+    return cft.DatetimeNoLeap(date_in.year, date_in.month, 1)
 
 
 def add_months(date_in,nmonth):
@@ -150,7 +155,7 @@ def add_months(date_in,nmonth):
     year = date_in.year + (date_in.month+nmonth-1)//12
     mth  = (date_in.month+nmonth-1)%12 + 1
     day  = min(date_in.day, calendar.monthrange(1,mth)[1]) # -> this assumes LEAP YEAR
-    return nct._netcdftime.DatetimeNoLeap(year,mth,day)
+    return cft.DatetimeNoLeap(year,mth,day)
 
 
 def read_datetime_info(files):
@@ -158,7 +163,8 @@ def read_datetime_info(files):
     time_bounds = []
     nc_calendar = None
     nc_dtime_unit = None
-    for filename in files:
+    for filepath in files:
+        filename = filepath.name
         ncfile = xr.open_dataset(filename,decode_times=False)
         if len(ncfile.time_bound.data)!=1:
             raise RuntimeError("Multiple time samples in a single file not supported yet. "

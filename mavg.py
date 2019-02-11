@@ -12,7 +12,7 @@ import argparse
 import netCDF4 as nc4
 import xarray as xr
 from mpi4py import MPI
-from common import GlobalData, get_file_names, AvgChunk, next_month_1st, add_months
+from common import GlobalData, get_file_paths, AvgChunk, next_month_1st, add_months
 
 # pylint: disable=line-too-long, bad-whitespace, len-as-condition, invalid-name
 
@@ -63,7 +63,7 @@ def preprocess_out_files():
         while not chunk_preprocessed:
 
             # Read the input file
-            with xr.open_dataset(glob.files[fi],decode_times=False, cache=False, decode_cf=False) as ncfile_in:
+            with xr.open_dataset(glob.files[fi](),decode_times=False, cache=False, decode_cf=False) as ncfile_in:
                 day0_in = ncfile_in.time_bound.data[0][0]   # beginning day of this input file
                 day1_in = ncfile_in.time_bound.data[-1][1]  # ending day of this input file
                 date0_in = nc4.num2date(day0_in, glob.nc_dtime_unit, glob.nc_calendar) # beginning date of this file
@@ -116,7 +116,7 @@ def process_out_files(avg_chunks):
             print("rank:",comm.Get_rank(), " \tprocessing", avg_chunks.index(chunk)+1, "of", len(avg_chunks))
 
         # instantiate the first input file to get some general information and time-independent arrays:
-        in_ds0 = xr.open_dataset(chunk.in_files[0][0], decode_times=False, cache=False, decode_cf=False)
+        in_ds0 = xr.open_dataset(chunk.in_files[0][0](), decode_times=False, cache=False, decode_cf=False)
 
         # instantiate the file to write
         with xr.Dataset(coords=in_ds0.coords, attrs=in_ds0.attrs) as out_ds:
@@ -140,9 +140,9 @@ def process_out_files(avg_chunks):
                 with xr.Dataset(coords=in_ds0.coords, attrs=in_ds0.attrs) as out_ds:
 
                     for in_file in chunk.in_files:
-                        in_filename = in_file[0]
+                        in_filepath = in_file[0]()
                         weight      = in_file[1]
-                        with xr.open_dataset(in_filename, decode_times=False) as in_ds:
+                        with xr.open_dataset(in_filepath, decode_times=False) as in_ds:
                             if not da in out_ds: # instantiate the data array
                                 out_ds[da] = in_ds[da]*weight
                             else: # accumulate
@@ -156,7 +156,7 @@ def main():
     global glob
 
     # get the list of files
-    files = get_file_names(args.f, comm.Get_rank(), args.x, args.v)
+    files = get_file_paths(args.f, comm.Get_rank(), args.x, args.v)
 
     # get the global information from files (at rank 0 only)
     if comm.Get_rank()==0:
