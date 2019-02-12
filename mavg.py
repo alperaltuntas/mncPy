@@ -144,8 +144,8 @@ def process_out_files(avg_intervals):
                         weight      = in_file[1]
                         with xr.open_dataset(in_filepath, decode_times=False, cache=False, decode_cf=False) as in_ds:
                             if not da in out_ds: # instantiate the data array
-                                out_ds[da] = in_ds[da]
-                                #out_ds[da] = in_ds[da]*weight
+                                out_ds[da]      = in_ds[da]             # first, copy the array with all tha metada
+                                out_ds[da].data = in_ds[da].data*weight # now correct the values
                             else: # accumulate
                                 out_ds[da].data = out_ds[da].data + in_ds[da].data*weight
 
