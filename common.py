@@ -33,11 +33,11 @@ class GlobalData(object,):
         self.nc_dtime_unit  = None # netcdf datetime type. should be "days since 0000-01-01 00:00:00".
                                     # others not tested.
 
-    def obtain_global_info(self, files, commsize):
+    def obtain_global_info(self, filePaths, commsize):
         """ obtain the global information from the set of netcdf files """
 
-        self.files = files
-        f0name = self.files[0].name
+        self.filePaths = filePaths
+        f0name = self.filePaths[0].name
 
         # determine the parts of the file name that comes before (prefix) and after (suffix) the date identifier
         ndashes0 = f0name.count('-') # if two dashes: year-month-day; if one: year-month
@@ -50,7 +50,7 @@ class GlobalData(object,):
         else:
             raise RuntimeError("Cannot determine the date pattern in file "+f0name)
 
-        for filepath in self.files:
+        for filepath in self.filePaths:
             filename = filepath.name
             ndashes = filename.count('-')
             if not ndashes==ndashes0:
@@ -69,7 +69,7 @@ class GlobalData(object,):
 
 
         # read the time bounds within all the input netcdf files
-        self.date0_in, self.date1_in, self.nc_dtime_unit, self.nc_calendar = read_datetime_info(self.files)
+        self.date0_in, self.date1_in, self.nc_dtime_unit, self.nc_calendar = read_datetime_info(self.filePaths)
 
         # determine the time bounds for the monthly netcdf files to be written
         self.date0_out = self.date0_in
@@ -158,12 +158,12 @@ def add_months(date_in,nmonth):
     return cft.DatetimeNoLeap(year,mth,day)
 
 
-def read_datetime_info(files):
+def read_datetime_info(filePaths):
     """ returns the beginning and ending dates of a given list of files """
     time_bounds = []
     nc_calendar = None
     nc_dtime_unit = None
-    for filepath in files:
+    for filepath in filePaths:
         filename = filepath.name
         ncfile = xr.open_dataset(filename,decode_times=False)
         if len(ncfile.time_bound.data)!=1:
@@ -196,17 +196,19 @@ def read_datetime_info(files):
     return date0, date1, nc_dtime_unit, nc_calendar
 
 
-class AvgChunk(object):
-    """ Encapsulates some general information about average chunks, e.g., monthly averages, to be generated """
+class AvgInterval(object):
+    """ Encapsulates some general information about average intervals, e.g., monthly averages, to be generated """
     def __init__(self, date0, freq, fprefix, fsuffix):
         self.date0 = date0
         if freq == "m" or freq == "month":
             self.date1 = next_month_1st(self.date0)
             self.ndays = calendar.monthrange(1,self.date0.month)[1] # assumes no leap year
+            hist_str = "{:04d}-{:02d}-{:02d}".format(self.date1.year,self.date1.month,self.date1.day)
+        else:
+            raise RuntimeError("Unknown interval type")
 
         # list of input files to read to generate this average
         self.in_files = []
 
         # determine out file name
-        hist_str = "{:04d}-{:02d}-{:02d}".format(self.date1.year,self.date1.month,self.date1.day)
         self.out_filename = "mavg_"+fprefix+hist_str+fsuffix
