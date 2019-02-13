@@ -64,8 +64,8 @@ def preprocess_out_files():
 
             # Read the input file
             with xr.open_dataset(glob.filePaths[fi](),decode_times=False, cache=False, decode_cf=False) as ncfile_in:
-                day0_in = ncfile_in.time_bound.data[0][0]   # beginning day of this input file
-                day1_in = ncfile_in.time_bound.data[-1][1]  # ending day of this input file
+                day0_in = ncfile_in[glob.time_bound_str].data[0][0]   # beginning day of this input file
+                day1_in = ncfile_in[glob.time_bound_str].data[-1][1]  # ending day of this input file
                 date0_in = nc4.num2date(day0_in, glob.nc_dtime_unit, glob.nc_calendar) # beginning date of this file
                 date1_in = nc4.num2date(day1_in, glob.nc_dtime_unit, glob.nc_calendar) # ending date of this file
 
@@ -114,7 +114,8 @@ def process_out_files(avg_intervals):
     fillValDict = {'_FillValue': None}
     for interval in avg_intervals:
         if args.v:
-            print("rank:",comm.Get_rank(), " \tprocessing", avg_intervals.index(interval)+1, "of", len(avg_intervals))
+            index = vg_intervals.index(interval)
+            print("rank:",comm.Get_rank(), " \tprocessing", index+1, "of", len(avg_intervals))
 
         # instantiate the first input file to get some general information and time-independent arrays:
         in_ds0 = xr.open_dataset(interval.in_files[0][0](), decode_times=False, cache=False, decode_cf=False)
@@ -123,15 +124,15 @@ def process_out_files(avg_intervals):
         with xr.Dataset(coords=in_ds0.coords, attrs=in_ds0.attrs) as out_ds:
 
             for da in in_ds0.variables:
-                if not "time" in in_ds0[da].dims:
+                if not glob.time_str in in_ds0[da].dims:
                     out_ds[da] = in_ds0[da]
-            encoding_dict = {da: fillValDict for da in in_ds0.variables if not "time" in in_ds0[da].dims}
-            out_ds.to_netcdf(path=interval.out_filename, mode='w',unlimited_dims=["time"], encoding=encoding_dict)
+            encoding_dict = {da: fillValDict for da in in_ds0.variables if not glob.time_str in in_ds0[da].dims}
+            out_ds.to_netcdf(path=interval.out_filename, mode='w',unlimited_dims=[glob.time_str], encoding=encoding_dict)
 
         # now compute and fill in variables with "time" dimension
         # (weighted averaging)
         for da in in_ds0.variables:
-            if "time" in in_ds0[da].dims:
+            if glob.time_str in in_ds0[da].dims:
                 if  args.v and comm.Get_rank()==0:
                     print(da)
 
