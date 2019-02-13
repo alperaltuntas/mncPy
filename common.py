@@ -223,9 +223,9 @@ class AvgInterval(object):
     def __init__(self, date0, freq, fprefix, fsuffix):
         self.date0 = date0
         if freq == "m" or freq == "month":
+            hist_str = "{:04d}-{:02d}".format(self.date0.year,self.date0.month)
             self.date1 = next_month_1st(self.date0)
             self.ndays = calendar.monthrange(1,self.date0.month)[1] # assumes no leap year
-            hist_str = "{:04d}-{:02d}-{:02d}".format(self.date1.year,self.date1.month,self.date1.day)
         else:
             raise RuntimeError("Unknown interval type")
 

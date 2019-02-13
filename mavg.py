@@ -157,18 +157,21 @@ def process_out_files(avg_intervals):
         with xr.open_dataset(in_filepath, decode_times=False, cache=False, decode_cf=False) as in_ds:
             with xr.Dataset() as out_ds:
                 # time
-                t_str = glob.time_str
-                out_ds[t_str] = in_ds[t_str] # instantiate time da
-                out_ds[t_str].data = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)]
-                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={t_str:fillValDict})
-            with xr.Dataset() as out_ds:
-                # time_bound
-                tb_str = glob.time_bound_str
-                t_str = glob.time_str
-                out_ds[tb_str] = in_ds[tb_str] # instantiate time_bound da
+                t_str = glob.time_str           # time
+                tb_str = glob.time_bound_str    # time_bound
+                out_ds[t_str] = in_ds[t_str]    # instantiate time da
+                out_ds[tb_str] = in_ds[tb_str]  # instantiate time_bound da
+
+                # update time_bound first
                 out_ds[tb_str].data = [[cft.date2num(interval.date0, in_ds[t_str].units, in_ds[t_str].calendar),
                                         cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar) ]]
-                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={tb_str:fillValDict})
+
+                # now update time
+                out_ds[t_str].data = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)]
+
+                # write to file
+                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={t_str:fillValDict,
+                                                                                 tb_str:fillValDict})
 
 
 def main():
