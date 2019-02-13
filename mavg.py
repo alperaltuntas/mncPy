@@ -11,6 +11,7 @@ from __future__ import print_function
 import argparse
 import netCDF4 as nc4
 import xarray as xr
+import cftime as cft
 from mpi4py import MPI
 from common import GlobalData, get_file_paths, AvgInterval, next_month_1st, add_months
 
@@ -151,6 +152,23 @@ def process_out_files(avg_intervals):
                                 out_ds[da].data = out_ds[da].data + in_ds[da].data*weight
 
                     out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={da:fillValDict})
+
+        # finally, correct time and time_bound
+        with xr.open_dataset(in_filepath, decode_times=False, cache=False, decode_cf=False) as in_ds:
+            with xr.Dataset() as out_ds:
+                # time
+                t_str = glob.time_str
+                out_ds[t_str] = in_ds[t_str] # instantiate time da
+                out_ds[t_str].data = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)]
+                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={t_str:fillValDict})
+            with xr.Dataset() as out_ds:
+                # time_bound
+                tb_str = glob.time_bound_str
+                t_str = glob.time_str
+                out_ds[tb_str] = in_ds[tb_str] # instantiate time_bound da
+                out_ds[tb_str].data = [[cft.date2num(interval.date0, in_ds[t_str].units, in_ds[t_str].calendar),
+                                        cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar) ]]
+                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={tb_str:fillValDict})
 
 
 def main():
