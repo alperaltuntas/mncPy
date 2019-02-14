@@ -34,7 +34,7 @@ class GlobalData(object,):
         self.time_str       = None # time variable in the netcdf files
         self.time_bound_str = None # time_bound variable in the netcdf files
 
-    def obtain_global_info(self, filePaths, commsize):
+    def obtain_global_info(self, filePaths, commsize, user_date0_out=None, user_date1_out=None):
         """ obtain the global information from the set of netcdf files """
 
         self.filePaths = filePaths
@@ -93,10 +93,20 @@ class GlobalData(object,):
             read_datetime_info(self.filePaths, self.time_str, self.time_bound_str)
 
         # determine the time bounds for the monthly netcdf files to be written
+        if (user_date0_out or user_date1_out) and self.nc_calendar != "noleap":
+            raise RuntimeError("-d0 and -d1 options only supported for noleap calendars for now")
+
+        # date0
         self.date0_out = self.date0_in
+        if user_date0_out:
+            self.date0_out = max(self.date0_out, user_date0_out)
         if self.date0_in.day != 1:
             self.date0_out = next_month_1st(self.date0_in)
+
+        # date1
         self.date1_out = first_of_month(self.date1_in)
+        if user_date1_out:
+            self.date1_out = min(self.date1_out, user_date1_out )
 
         # number of months to produce:
         self.nmonths = (self.date1_out.year - self.date0_out.year )*12 + \

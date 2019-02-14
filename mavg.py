@@ -24,6 +24,12 @@ parser.add_argument('-f', metavar='path', type=str, required=True, nargs='*',
 parser.add_argument('-x', metavar='excl', type=str, required=False,
                     help='(optional). File names that have the string provided after this flag'
                          ' will be discarded. ')
+parser.add_argument('-d0', metavar='date0', type=str, required=False,
+                    help='Beginning date for averaging (yyyy-mm). If not provided, averaging will begin '
+                    'from earliest possible date')
+parser.add_argument('-d1', metavar='date1', type=str, required=False,
+                    help='Ending date for averaging (yyyy-mm). If not provided, averaging will end '
+                    'at latest possible date')
 parser.add_argument('-v', action='store_true', required=False, help='Verbose logging')
 args = parser.parse_args()
 
@@ -115,7 +121,7 @@ def process_out_files(avg_intervals):
     fillValDict = {'_FillValue': None}
     for interval in avg_intervals:
         if args.v:
-            index = vg_intervals.index(interval)
+            index = avg_intervals.index(interval)
             print("rank:",comm.Get_rank(), " \tprocessing", index+1, "of", len(avg_intervals))
 
         # instantiate the first input file to get some general information and time-independent arrays:
@@ -183,10 +189,26 @@ def main():
 
     # get the global information from files (at rank 0 only)
     if comm.Get_rank()==0:
-        glob.obtain_global_info(filePaths, comm.Get_size())
+
+        # determine beginning and ending dates for files to be generated
+        user_date0_in = user_date1_out = None
+        if args.d0:
+            user_date0_out = cft.DatetimeNoLeap(year    = int(args.d0[0:4]),
+                                                month   = int(args.d0[5:7]),
+                                                day     = 1 )
+        if args.d1:
+            user_date1_out = next_month_1st(
+                                cft.DatetimeNoLeap( year    = int(args.d1[0:4]),
+                                                    month   = int(args.d1[5:7]),
+                                                    day     = 1 ) )
+ 
+        # now get the global information
+        glob.obtain_global_info(filePaths, comm.Get_size(), user_date0_out, user_date1_out)
 
     # broadcast/receive the global information:
     glob = comm.bcast(glob, root=0)
+
+    avg_intervals = preprocess_out_files()
 
     # print global information
     if comm.Get_rank()==0:
@@ -198,7 +220,6 @@ def main():
         print("Max number of months per core:", glob.m_per_proc)
 
     # generate the avg files:
-    avg_intervals = preprocess_out_files()
     process_out_files(avg_intervals)
 
 
