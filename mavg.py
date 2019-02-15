@@ -47,6 +47,7 @@ def preprocess_out_files():
         print("pre-processing files")
 
     # beginning and ending dates for this proc
+
     date0_proc = add_months(glob.date0_out, min(glob.m_per_proc*(comm.Get_rank()),glob.nmonths))
     date1_proc = add_months(glob.date0_out, min(glob.m_per_proc*(comm.Get_rank()+1),glob.nmonths))
 
@@ -200,8 +201,6 @@ def main():
                                                 day     = 1 ) )
     # now get the global information
     glob.obtain_global_info(filePaths, comm, user_date0_out, user_date1_out)
-
-    exit()
 
     # broadcast/receive the global information:
     glob = comm.bcast(glob, root=0)

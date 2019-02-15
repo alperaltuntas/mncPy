@@ -34,6 +34,7 @@ class GlobalData(object,):
         self.nc_dtime_unit  = None # netcdf datetime type. should be "days since 0000-01-01 00:00:00".
         self.time_str       = None # time variable in the netcdf files
         self.time_bound_str = None # time_bound variable in the netcdf files
+        self.filePaths      = None # input file paths provided to be read in to generate averagings
 
     def get_file_naming_pattern(self, filePaths):
 
@@ -119,28 +120,25 @@ class GlobalData(object,):
         comm.Reduce([tbounds0_local, MPI.INT],[tbounds0_global, MPI.INT], op=MPI.MAX, root=0)
         comm.Reduce([tbounds1_local, MPI.INT],[tbounds1_global, MPI.INT], op=MPI.MAX, root=0)
 
-        # now make some sanity checks
+        # now make some sanity checks and determine global begin and end times for input files
         comm.Barrier()
         if comm.Get_rank()==0:
             time_bounds = [(tbounds0_global[i], tbounds1_global[i]) for i in range(len(tbounds0_global))]
             time_bounds.sort(key = lambda x:x[0])
             if len(time_bounds)>1:
+                # check whether there are any skipped time intervals
                 for i in range(len(time_bounds)-1):
                     assert time_bounds[i][1] == time_bounds[i+1][0], \
                             "Time bounds in the netcdf files are discontinuous, i.e., " \
                             "there may be missing netcdf files!"
 
-            print(time_bounds)
+            # global begin and end times
+            self.date0_in = nc4.num2date(time_bounds[0][0], ncfile[time_str].units, self.nc_calendar)
+            self.date1_in = nc4.num2date(time_bounds[-1][1], ncfile[time_str].units, self.nc_calendar)
 
-
-        exit()
-
-        # check whether there are any skipped time intervals
-        # begin datetime
-        date0 = nc4.num2date(time_bounds[0][0], ncfile[time_str].units, self.nc_calendar)
-        date1 = nc4.num2date(time_bounds[-1][1], ncfile[time_str].units, self.nc_calendar)
-        return date0, date1
-
+        comm.Barrier()
+        self.date0_in = comm.bcast(self.date0_in, root=0)
+        self.date1_in = comm.bcast(self.date1_in, root=0)
 
     def obtain_global_info(self, filePaths, comm, user_date0_out=None, user_date1_out=None):
         """ obtain the global information from the set of netcdf files """
@@ -149,15 +147,23 @@ class GlobalData(object,):
         if comm.Get_rank()==0:
             self.get_file_naming_pattern(filePaths)
             self.get_time_var_names(filePaths[0]())
-        self = comm.bcast(self, root=0)
+        # now broadcast the general info the root obtained above
+        self.fprefix        = comm.bcast(self.fprefix, root=0)
+        self.fsuffix        = comm.bcast(self.fsuffix, root=0)
+        self.filePaths      = comm.bcast(self.filePaths, root=0)
+        self.time_str       = comm.bcast(self.time_str, root=0)
+        self.time_bound_str = comm.bcast(self.time_bound_str, root=0)
 
         # read the time bounds within all the input netcdf files
-        self.date0_in, self.date1_in, = \
-            self.read_datetime_info(self.filePaths, self.time_str, self.time_bound_str, comm)
+        self.read_datetime_info(self.filePaths, self.time_str, self.time_bound_str, comm)
 
         # determine the time bounds for the monthly netcdf files to be written
         if (user_date0_out or user_date1_out) and self.nc_calendar != "noleap":
             raise RuntimeError("-d0 and -d1 options only supported for noleap calendars for now")
+
+        if (user_date0_out and user_date1_out):
+            if (not user_date1_out>user_date0_out):
+                raise RuntimeError("User specified output end time (-d1) not greater then begin time (-d0)")
 
         # date0
         self.date0_out = self.date0_in
@@ -177,7 +183,6 @@ class GlobalData(object,):
 
         # Max number of months per processor
         self.m_per_proc = int(np.ceil(float(self.nmonths)/comm.Get_size()))
-
 
 FilePath_nt = namedtuple('FilePath', ['base','name'])
 class FilePath(FilePath_nt):
