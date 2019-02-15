@@ -11,6 +11,7 @@ import netCDF4 as nc4
 import xarray as xr
 import cftime as cft
 from collections import namedtuple
+from mpi4py import MPI
 
 # pylint: disable=line-too-long, bad-whitespace, len-as-condition
 
@@ -34,8 +35,7 @@ class GlobalData(object,):
         self.time_str       = None # time variable in the netcdf files
         self.time_bound_str = None # time_bound variable in the netcdf files
 
-    def obtain_global_info(self, filePaths, commsize, user_date0_out=None, user_date1_out=None):
-        """ obtain the global information from the set of netcdf files """
+    def get_file_naming_pattern(self, filePaths):
 
         self.filePaths = filePaths
         f0name = self.filePaths[0].name
@@ -68,29 +68,92 @@ class GlobalData(object,):
                 raise RuntimeError("Files have different naming patterns. Make sure all files have the same pattern."+\
                                    " You may use -x flag to exclude certain files.")
 
-        # get time_str and time_bound_str name:
-        def get_time_vars(filePath):
-            """ determines time_str and time_bound_str of a given netcdf file"""
+    # get time_str and time_bound_str name:
+    def get_time_var_names(self,filePath):
+        """ determines time_str and time_bound_str of a given netcdf file"""
 
-            ds = xr.open_dataset(filePath,decode_times=False)
-            if "time" in ds.coords:
-                self.time_str = "time"
-            elif len(ds.encoding.get("unlimited_dims", None)) ==1:
-                self.time_str = list(ds.encoding.get("unlimited_dims", None))[0]
-            else:
-                raise RuntimeError("Cannot determine time variable")
+        ds = xr.open_dataset(filePath,decode_times=False)
+        if "time" in ds.coords:
+            self.time_str = "time"
+        elif len(ds.encoding.get("unlimited_dims", None)) ==1:
+            self.time_str = list(ds.encoding.get("unlimited_dims", None))[0]
+        else:
+            raise RuntimeError("Cannot determine time variable")
 
-            if "time_bound" in ds.variables:
-                self.time_bound_str = "time_bound"
-            elif "bounds" in ds[time_str].attrs:
-                self.time_bound_str = ds[time_str].attrs["bounds"]
+        if "time_bound" in ds.variables:
+            self.time_bound_str = "time_bound"
+        elif "bounds" in ds[time_str].attrs:
+            self.time_bound_str = ds[time_str].attrs["bounds"]
+        else:
+            raise RuntimeError("Cannot determine time variable")
+
+    def read_datetime_info(self, filePaths, time_str, time_bound_str, comm):
+        """ returns the beginning and ending dates of a given list of files """
+
+        tbounds0_local = np.array([-9999]*len(filePaths))
+        tbounds1_local = np.array([-9999]*len(filePaths))
+
+        for i in range(comm.Get_rank(), len(filePaths), comm.Get_size()):
+            filename = filePaths[i].name
+            ncfile = xr.open_dataset(filePaths[i](),decode_times=False)
+            if len(ncfile[time_bound_str].data)!=1:
+                raise RuntimeError("Multiple time samples in a single file not supported yet. "
+                                   "You can exclude files with multiple time samples using the -x flag, "
+                                   "e.g., -x nday")
+            tbounds0_local[i] = ncfile[time_bound_str].data[0][0]     # begin time
+            tbounds1_local[i] = ncfile[time_bound_str].data[-1][1]    # end time
+            # determine the datetime unit
+            if not self.nc_dtime_unit:
+                self.nc_dtime_unit = ncfile[time_str].units
             else:
-                raise RuntimeError("Cannot determine time variable")
-        get_time_vars(self.filePaths[0]())
+                assert self.nc_dtime_unit == ncfile[time_str].units, "Incompatible time units in files!"
+            # determine the calendar (noleap expected)
+            if not self.nc_calendar:
+                self.nc_calendar = ncfile[time_str].calendar
+            else:
+                assert self.nc_calendar == ncfile[time_str].calendar, "Incompatible calendars in files!"
+
+        # reduce the time_bounds globally in rank 0
+        tbounds0_global = np.array(tbounds0_local)
+        tbounds1_global = np.array(tbounds1_local)
+        comm.Reduce([tbounds0_local, MPI.INT],[tbounds0_global, MPI.INT], op=MPI.MAX, root=0)
+        comm.Reduce([tbounds1_local, MPI.INT],[tbounds1_global, MPI.INT], op=MPI.MAX, root=0)
+
+        # now make some sanity checks
+        comm.Barrier()
+        if comm.Get_rank()==0:
+            time_bounds = [(tbounds0_global[i], tbounds1_global[i]) for i in range(len(tbounds0_global))]
+            time_bounds.sort(key = lambda x:x[0])
+            if len(time_bounds)>1:
+                for i in range(len(time_bounds)-1):
+                    assert time_bounds[i][1] == time_bounds[i+1][0], \
+                            "Time bounds in the netcdf files are discontinuous, i.e., " \
+                            "there may be missing netcdf files!"
+
+            print(time_bounds)
+
+
+        exit()
+
+        # check whether there are any skipped time intervals
+        # begin datetime
+        date0 = nc4.num2date(time_bounds[0][0], ncfile[time_str].units, self.nc_calendar)
+        date1 = nc4.num2date(time_bounds[-1][1], ncfile[time_str].units, self.nc_calendar)
+        return date0, date1
+
+
+    def obtain_global_info(self, filePaths, comm, user_date0_out=None, user_date1_out=None):
+        """ obtain the global information from the set of netcdf files """
+
+        # first some general info. determined by root and broadcasted
+        if comm.Get_rank()==0:
+            self.get_file_naming_pattern(filePaths)
+            self.get_time_var_names(filePaths[0]())
+        self = comm.bcast(self, root=0)
 
         # read the time bounds within all the input netcdf files
-        self.date0_in, self.date1_in, self.nc_dtime_unit, self.nc_calendar = \
-            read_datetime_info(self.filePaths, self.time_str, self.time_bound_str)
+        self.date0_in, self.date1_in, = \
+            self.read_datetime_info(self.filePaths, self.time_str, self.time_bound_str, comm)
 
         # determine the time bounds for the monthly netcdf files to be written
         if (user_date0_out or user_date1_out) and self.nc_calendar != "noleap":
@@ -113,7 +176,7 @@ class GlobalData(object,):
                   (self.date1_out.month - self.date0_out.month)
 
         # Max number of months per processor
-        self.m_per_proc = int(np.ceil(float(self.nmonths)/commsize))
+        self.m_per_proc = int(np.ceil(float(self.nmonths)/comm.Get_size()))
 
 
 FilePath_nt = namedtuple('FilePath', ['base','name'])
@@ -187,45 +250,6 @@ def add_months(date_in,nmonth):
     mth  = (date_in.month+nmonth-1)%12 + 1
     day  = min(date_in.day, calendar.monthrange(1,mth)[1]) # -> this assumes LEAP YEAR
     return cft.DatetimeNoLeap(year,mth,day)
-
-
-def read_datetime_info(filePaths, time_str, time_bound_str):
-    """ returns the beginning and ending dates of a given list of files """
-
-    time_bounds = []
-    nc_calendar = None
-    nc_dtime_unit = None
-    for filepath in filePaths:
-        filename = filepath.name
-        ncfile = xr.open_dataset(filename,decode_times=False)
-        if len(ncfile[time_bound_str].data)!=1:
-            raise RuntimeError("Multiple time samples in a single file not supported yet. "
-                               "You can exclude files with multiple time samples using the -x flag, "
-                               "e.g., -x nday")
-        time_bounds.append([ncfile[time_bound_str].data[0][0],       # begin time
-                            ncfile[time_bound_str].data[-1][1] ])    # end time
-        # determine the datetime unit
-        if not nc_dtime_unit:
-            nc_dtime_unit = ncfile[time_str].units
-        else:
-            assert nc_dtime_unit == ncfile[time_str].units, "Incompatible time units in files!"
-        # determine the calendar (noleap expected)
-        if not nc_calendar:
-            nc_calendar = ncfile[time_str].calendar
-        else:
-            assert nc_calendar == ncfile[time_str].calendar, "Incompatible calendars in files!"
-
-    # check whether there are any skipped time intervals
-    time_bounds.sort(key = lambda x:x[0])
-    if len(time_bounds)>1:
-        for i in range(len(time_bounds)-1):
-            assert time_bounds[i][1] == time_bounds[i+1][0], \
-                    "Time bounds in the netcdf files are discontinuous, i.e., there may be missing netcdf files!"
-
-    # begin datetime
-    date0 = nc4.num2date(time_bounds[0][0], ncfile[time_str].units, nc_calendar)
-    date1 = nc4.num2date(time_bounds[-1][1], ncfile[time_str].units, nc_calendar)
-    return date0, date1, nc_dtime_unit, nc_calendar
 
 
 class AvgInterval(object):

@@ -187,23 +187,21 @@ def main():
     # get the list of files
     filePaths = get_file_paths(args.f, comm.Get_rank(), args.x, args.v)
 
-    # get the global information from files (at rank 0 only)
-    if comm.Get_rank()==0:
+    # determine beginning and ending dates for files to be generated
+    user_date0_in = user_date1_out = None
+    if args.d0:
+        user_date0_out = cft.DatetimeNoLeap(year    = int(args.d0[0:4]),
+                                            month   = int(args.d0[5:7]),
+                                            day     = 1 )
+    if args.d1:
+        user_date1_out = next_month_1st(
+                            cft.DatetimeNoLeap( year    = int(args.d1[0:4]),
+                                                month   = int(args.d1[5:7]),
+                                                day     = 1 ) )
+    # now get the global information
+    glob.obtain_global_info(filePaths, comm, user_date0_out, user_date1_out)
 
-        # determine beginning and ending dates for files to be generated
-        user_date0_in = user_date1_out = None
-        if args.d0:
-            user_date0_out = cft.DatetimeNoLeap(year    = int(args.d0[0:4]),
-                                                month   = int(args.d0[5:7]),
-                                                day     = 1 )
-        if args.d1:
-            user_date1_out = next_month_1st(
-                                cft.DatetimeNoLeap( year    = int(args.d1[0:4]),
-                                                    month   = int(args.d1[5:7]),
-                                                    day     = 1 ) )
- 
-        # now get the global information
-        glob.obtain_global_info(filePaths, comm.Get_size(), user_date0_out, user_date1_out)
+    exit()
 
     # broadcast/receive the global information:
     glob = comm.bcast(glob, root=0)
