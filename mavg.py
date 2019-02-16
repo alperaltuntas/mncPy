@@ -189,7 +189,7 @@ def main():
     filePaths = get_file_paths(args.f, comm.Get_rank(), args.x, args.v)
 
     # determine beginning and ending dates for files to be generated
-    user_date0_in = user_date1_out = None
+    user_date0_out = user_date1_out = None
     if args.d0:
         user_date0_out = cft.DatetimeNoLeap(year    = int(args.d0[0:4]),
                                             month   = int(args.d0[5:7]),
