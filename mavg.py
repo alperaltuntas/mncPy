@@ -30,6 +30,8 @@ parser.add_argument('-d0', metavar='date0', type=str, required=False,
 parser.add_argument('-d1', metavar='date1', type=str, required=False,
                     help='Ending date for averaging (yyyy-mm). If not provided, averaging will end '
                     'at latest possible date')
+parser.add_argument('--compress', action='store_true', required=False, help='If provided, '
+                    'write the mavg files in lossless compressed format.')
 parser.add_argument('-v', action='store_true', required=False, help='Verbose logging')
 args = parser.parse_args()
 
@@ -119,7 +121,10 @@ def process_out_files(avg_intervals):
 
     comm.Barrier()
 
-    fillValDict = {'_FillValue': None}
+    compr_dict = dict()
+    if args.compress:
+        compr_dict = dict(zlib=True, complevel=1)
+    compr_dict['_FillValue'] = None
     for interval in avg_intervals:
         if args.v:
             index = avg_intervals.index(interval)
@@ -134,7 +139,7 @@ def process_out_files(avg_intervals):
             for da in in_ds0.variables:
                 if not glob.time_str in in_ds0[da].dims:
                     out_ds[da] = in_ds0[da]
-            encoding_dict = {da: fillValDict for da in in_ds0.variables if not glob.time_str in in_ds0[da].dims}
+            encoding_dict = {da: compr_dict for da in in_ds0.variables if not glob.time_str in in_ds0[da].dims}
             out_ds.to_netcdf(path=interval.out_filename, mode='w',unlimited_dims=[glob.time_str], encoding=encoding_dict)
 
         # now compute and fill in variables with "time" dimension
@@ -158,7 +163,7 @@ def process_out_files(avg_intervals):
                             else: # accumulate
                                 out_ds[da].data = out_ds[da].data + in_ds[da].data*weight
 
-                    out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={da:fillValDict})
+                    out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={da:compr_dict})
 
         # finally, correct time and time_bound
         with xr.open_dataset(in_filepath, decode_times=False, cache=False, decode_cf=False) as in_ds:
@@ -177,8 +182,8 @@ def process_out_files(avg_intervals):
                 out_ds[t_str].data = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)]
 
                 # write to file
-                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={t_str:fillValDict,
-                                                                                 tb_str:fillValDict})
+                out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={t_str:compr_dict,
+                                                                                 tb_str:compr_dict})
 
 
 def main():
@@ -219,6 +224,8 @@ def main():
     # generate the avg files:
     process_out_files(avg_intervals)
 
+    if comm.Get_rank()==0:
+        print("done.")
 
 if __name__ == "__main__":
     if comm.Get_rank()==0:
