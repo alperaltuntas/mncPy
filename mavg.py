@@ -163,6 +163,13 @@ def process_out_files(avg_intervals):
                             else: # accumulate
                                 out_ds[da].data = out_ds[da].data + in_ds[da].data*weight
 
+                    # Reapply mask
+                    if ('_FillValue' in out_ds[da].attrs) and ('_FillValue' in in_ds[da].attrs):
+                        fillVal = in_ds[da].attrs['_FillValue']
+                        out_ds[da].data = xr.where( in_ds[da].data == fillVal, fillVal, out_ds[da].data)
+                    #else:
+                    #    print("Cannot find '_FillValue' for "+da)
+
                     out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={da:compr_dict})
 
         # finally, correct time and time_bound
