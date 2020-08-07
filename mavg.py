@@ -145,6 +145,10 @@ def process_out_files(avg_intervals):
         # now compute and fill in variables with "time" dimension
         # (weighted averaging)
         for da in in_ds0.variables:
+
+            if da in [glob.time_str, glob.time_bound_str]:
+                continue
+
             if glob.time_str in in_ds0[da].dims:
                 if  args.v and comm.Get_rank()==0:
                     print(da)
@@ -186,7 +190,8 @@ def process_out_files(avg_intervals):
                                         cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar) ]]
 
                 # now update time
-                out_ds[t_str].data = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)]
+                out_ds.assign_coords(t_str = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)])
+                out_ds[t_str].data[:] = [cft.date2num(interval.date1, in_ds[t_str].units, in_ds[t_str].calendar)]
 
                 # write to file
                 out_ds.to_netcdf(path=interval.out_filename, mode='a', encoding={t_str:compr_dict,
