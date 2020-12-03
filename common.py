@@ -42,7 +42,7 @@ class GlobalData(object,):
         f0name = self.filePaths[0].name
 
         # determine the parts of the file name that comes before (prefix) and after (suffix) the date identifier
-        ndashes0 = f0name.count('-') # if two dashes: year-month-day; if one: year-month
+        ndashes0 = f0name.split('.')[-2].count('-') # if two dashes: year-month-day; if one: year-month
         if ndashes0==1:
             self.fprefix = re.split(r'\d+-\d+', f0name)[0]
             self.fsuffix = re.split(r'\d+-\d+', f0name)[1]
@@ -55,6 +55,7 @@ class GlobalData(object,):
         for filepath in self.filePaths:
             filename = filepath.name
             ndashes = filename.count('-')
+            ndashes = filename.split('.')[-2].count('-')
             if not ndashes==ndashes0:
                 raise RuntimeError("Files have different naming patterns. Make sure all files have the same pattern."+\
                                    " You may use -x flag to exclude certain files.")
@@ -70,7 +71,7 @@ class GlobalData(object,):
                                    " You may use -x flag to exclude certain files.")
 
     # get time_str and time_bound_str name:
-    def get_time_var_names(self,filePath):
+    def get_time_var_names(self,filePath,bound_required=True):
         """ determines time_str and time_bound_str of a given netcdf file"""
 
         ds = xr.open_dataset(filePath,decode_times=False)
@@ -83,10 +84,10 @@ class GlobalData(object,):
 
         if "time_bound" in ds.variables:
             self.time_bound_str = "time_bound"
-        elif "bounds" in ds[time_str].attrs:
-            self.time_bound_str = ds[time_str].attrs["bounds"]
-        else:
-            raise RuntimeError("Cannot determine time variable")
+        elif "bounds" in ds[self.time_str].attrs:
+            self.time_bound_str = ds[self.time_str].attrs["bounds"]
+        elif bound_required:
+            raise RuntimeError("Cannot determine time bound variable")
 
     def read_datetime_info(self, filePaths, time_str, time_bound_str, comm):
         """ returns the beginning and ending dates of a given list of files """
@@ -130,7 +131,8 @@ class GlobalData(object,):
                 for i in range(len(time_bounds)-1):
                     assert time_bounds[i][1] == time_bounds[i+1][0], \
                             "Time bounds in the netcdf files are discontinuous, i.e., " \
-                            "there may be missing netcdf files!"
+                            "there may be missing netcdf files! Time bounds:"+str(time_bounds[i][1])+\
+                            " "+str(time_bounds[i+1][0])
 
             # global begin and end times
             self.date0_in = nc4.num2date(time_bounds[0][0], ncfile[time_str].units, self.nc_calendar)

@@ -58,20 +58,27 @@ def compress_files():
 
         path_in = os.path.join(lfile.base,lfile.name)
         path_out = os.path.join(lfile.base,"cmpr_"+lfile.name)
+        write_mode = 'w'
 
         if args.v:
             print("rank:",comm.Get_rank(), "\tcompressing", lfile.name, "(", lfiles.index(lfile)+1, "of", len(lfiles), ")")
+
+        # get time dimension
+        glob = GlobalData()
+        glob.get_time_var_names(path_in, bound_required=False)
 
         # first, write the the coordinates
         var_list = None
         with xr.open_dataset(path_in, decode_times=False, cache=False, decode_cf=False) as lfile_ds_in:
             with xr.Dataset(coords=lfile_ds_in.coords, attrs=lfile_ds_in.attrs) as lfile_ds_out:
                 var_list = lfile_ds_in.variables
-                for var in lfile_ds_in.coords:
-                    lfile_ds_out[var] = lfile_ds_in[var]
+                if len(lfile_ds_in.coords)>0:
+                    for var in lfile_ds_in.coords:
+                        lfile_ds_out[var] = lfile_ds_in[var]
 
-                encoding_dict = {var: compr_dict for var in lfile_ds_in.coords}
-                lfile_ds_out.to_netcdf(path=path_out, mode='w',unlimited_dims=["time"], encoding=encoding_dict)
+                    encoding_dict = {var: compr_dict for var in lfile_ds_in.coords}
+                    lfile_ds_out.to_netcdf(path=path_out, mode=write_mode, unlimited_dims=[glob.time_str], encoding=encoding_dict)
+                    write_mode = 'a'
 
         # now, write the remaining data arrays (one by one to eliminate memory limitation)
         for da in var_list:
@@ -79,7 +86,8 @@ def compress_files():
                 with xr.Dataset(coords=lfile_ds_in.coords, attrs=lfile_ds_in.attrs) as lfile_ds_out:
                     if not da in lfile_ds_in.coords:
                         lfile_ds_out[da] = lfile_ds_in[da]
-                        lfile_ds_out.to_netcdf(path=path_out, mode='a', encoding={da:compr_dict})
+                        lfile_ds_out.to_netcdf(path=path_out, mode=write_mode, unlimited_dims=[glob.time_str], encoding={da:compr_dict})
+                        write_mode = 'a'
 
     comm.Barrier()
     if comm.Get_rank()==0:
